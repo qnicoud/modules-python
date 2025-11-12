@@ -15,9 +15,7 @@ from datetime import datetime
 
 # Define custom scrapy classes for scanning required URLs
 class SpiderWrapper:
-    def __init__(self, urls, name_format, headers = None):
-        self.urls = urls
-
+    def __init__(self, headers = None):
         if not headers:
             self.headers = {"User-Agent":"Mozilla/5.0 (iPad; CPU OS 12_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"}
             self.headers = {"Content-Type": "text/plain;charset=UTF-8",
@@ -29,8 +27,6 @@ class SpiderWrapper:
         else:
             self.headers = headers
 
-        self.name_format= name_format
-
         self.process = CrawlerProcess(
             settings={
                 "FEEDS": {
@@ -39,12 +35,15 @@ class SpiderWrapper:
             }
         )
 
-    def run(self):
+    def set_crawler(self, urls, name_format):
         self.process.crawl(MyGenericSpider,
-                      urls = self.urls,
+                      urls = urls,
                       headers = self.headers,
-                      name_format = self.name_format)
+                      name_format = name_format)
+
+    def run(self):
         self.process.start()
+
 
 class MyGenericSpider(scrapy.Spider):
     name = "MyGenericSpider"
@@ -84,7 +83,7 @@ class MyGenericSpider(scrapy.Spider):
 
 # Define custom class for beautiful soup html page parsing
 class HtmlParser:
-    def  __init__(self, file_class_list, path, currency = "€", debug = False):
+    def  __init__(self, file_class_list, item_list, path, currency = "€", debug = False):
         assert type(debug)				is bool
         assert type(currency)			is str
         assert type(path)				is str
@@ -92,6 +91,7 @@ class HtmlParser:
 
         self.curr = currency
         self.file_class_list = file_class_list
+        self.item_list = item_list
         self.path = path
         self.debug = debug
 
@@ -118,7 +118,7 @@ class HtmlParser:
 
         soup = BeautifulSoup(html_doc, "html.parser")
 
-        for elem in soup.find_all(["span", "div"]):
+        for elem in soup.find_all(["span", "div", "p"]):
             my_regex = re.compile(class_name)
 
             if "class" in elem.attrs:
@@ -131,13 +131,14 @@ class HtmlParser:
         return "#NA"
 
     def price_parser(self):
-        for key in self.file_class_list:
-            file_name = f"{self.path}/{key}.html"
-            if os.path.isfile(file_name):
-                yield self.find_price(file_name, self.file_class_list[key])
-            else:
-                print(f"Not found:\t{file_name}")
-                yield "#NA"
+        for file in self.file_class_list:
+            for item in self.item_list:
+                file_name = f"{self.path}/{file}_{item}.html"
+                if os.path.isfile(file_name):
+                    yield self.find_price(file_name, self.file_class_list[file])
+                else:
+                    print(f"Not found:\t{file_name}")
+                    yield "#NA"
 
     def format_table_row(self, price_values):
         today = datetime.today()
